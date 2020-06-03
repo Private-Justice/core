@@ -1,0 +1,98 @@
+version: "3.0"
+
+services:
+
+  nginx:
+    image: sierratecnologia/nginx
+    restart: always
+    ports:
+      - "60:80"
+    volumes:
+      - ./docker/nginx_conf:/etc/nginx/conf.d
+      - ./:/var/www/html
+      - /usr/bin/ssh:/usr/bin/ssh
+    depends_on:
+      - php
+    networks:
+      - outside
+      - internal
+
+  elasticsearch:
+    image: elasticsearch:2.3.5
+    volumes:
+      - privatejustice_db_elastic:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+    networks:
+      - internal
+      
+  php:
+    build:
+      context: ./docker/php/
+      dockerfile: ./Dockerfile
+    command: bash -c "php-fpm"
+    environment:
+      PHP_XDEBUG_ENABLED: 1 # Set 1 to enable.
+      PHP_IDE_CONFIG: "serverName=docker"
+      XDEBUG_CONFIG: "remote_host=172.17.0.1"
+    volumes:
+      - ./:/var/www/html
+      - ~/.ssh:/root/.ssh
+      - ./docker/logs/xdebug/:/tmp/xdebug_log #Logs for Xdebug
+      - ~/Desenvolvimento/Libs/:/var/Libs
+      - ~/Desenvolvimento/Libs/:/Libs
+    restart: always
+    depends_on:
+      - db
+    networks:
+      - internal
+      - sdnet
+
+  redis:
+    image: redis:5.0
+    restart: always
+    networks:
+      - internal
+    volumes:
+      - privatejustice_cachedata:/data
+
+  mongo:
+    image: mongo:3.2
+    volumes:
+      - privatejustice_db_data:/var/lib/mongo
+      - ./database/dumps:/dumps
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: A123456
+
+  db:
+    image: mysql:5.7
+    volumes:
+      - privatejustice_db_data:/var/lib/mysql
+      - ./database/dumps:/dumps
+    environment:
+      MYSQL_ROOT_PASSWORD: A123456
+      MYSQL_DATABASE: privatejustice
+      MYSQL_USER: privatejustice
+      MYSQL_PASSWORD: A123456
+    networks:
+      - internal
+
+volumes:
+  privatejustice_db_data:
+    driver: local
+  privatejustice_cachedata:
+    driver: local
+  privatejustice_db_elastic:
+    driver: local
+
+networks:
+  outside:
+    external: true
+  internal:
+    driver: bridge
+  sdnet:
+    driver: bridge
